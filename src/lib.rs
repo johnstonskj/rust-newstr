@@ -148,7 +148,6 @@ macro_rules! standard_impls {
 #[macro_export(local_inner_macros)]
 macro_rules! is_valid_newstring {
     ($new_name:ident, $closure:expr) => {
-
         standard_struct! { $new_name }
 
         standard_impls! { $new_name }
@@ -211,7 +210,6 @@ macro_rules! regex_is_valid {
 /// predicate is called by `T::is_valid` and is then used in the implementation of `FromStr` to
 /// determine whether to return a new instance or error.
 
-
 ///
 /// This macro takes a new type identifier and a *parse function* to produce a new type. The parse
 /// function **must** take the form `fn(&str) -> Result<String, Err>`, this is called from within
@@ -251,13 +249,16 @@ macro_rules! regex_is_valid {
 /// assert_eq!(OnlyUpperCase::from_str("HELLO").unwrap().to_string(), String::from("HELLO"));
 /// ```
 ///
+/// # Dependencies
+///
+///
+///
 #[macro_export(local_inner_macros)]
 macro_rules! from_str_newstring {
     ($new_name:ident, $closure:expr) => {
         from_str_newstring! { $new_name, $closure, () }
     };
     ($new_name:ident, $closure:expr, $error:ty) => {
-
         standard_struct! { $new_name }
 
         standard_impls! { $new_name }
@@ -266,7 +267,7 @@ macro_rules! from_str_newstring {
             type Err = $error;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                $closure(s).map(|s|Self(s))
+                $closure(s).map(|s| Self(s))
             }
         }
 
