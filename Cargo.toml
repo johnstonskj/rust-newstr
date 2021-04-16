@@ -1,0 +1,23 @@
+[package]
+name = "newstr"
+description = "Simple macros for declaring String-base new types."
+version = "0.1.0"
+authors = ["Simon Johnston <johnstonskj@gmail.com>"]
+edition = "2018"
+documentation = "https://docs.rs/newstr/"
+repository = "https://github.com/johnstonskj/rust-newstr.git"
+license = "MIT"
+readme = "README.md"
+publish = true
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+all-features = true
+
+[features]
+default = ["regex_is_valid"]
+regex_is_valid = ["lazy_static", "regex"]
+
+[dependencies]
+lazy_static = { optional = true, version = "1.4.0" }
+regex = { optional = true, version = "1.4.5" }
