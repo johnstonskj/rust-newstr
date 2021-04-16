@@ -56,3 +56,33 @@ assert_eq!(
     String::from("hello_world")
 );
 ```
+
+## Dependencies
+
+In the example above you can see the necessary use-statements for the trait implementations the
+macros generate. Unless you use `regex_is_valid` there are no crate dependencies; if you do you will
+need to add `lazy_static` and `regex` dependencies.
+
+If the macros in this crate take on addition dependencies or provide new implementations the set of
+use statements may change which will break consumer builds. To avoid this another macro,
+`use_required`, will add any required use statements the consumer requires.
+
+```rust
+# use newstr::{is_valid_newstring, use_required};
+use_required!();
+
+is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty());
+```
+
+## Changes
+
+**Version 0.1.1**
+
+* Added new `use_required` macro.
+* Removed unnecessary feature 'regex_is_valid', the build doesn't require this to avoid bloat.
+* Made `lazy_static` and `regex` dev dependencies, if you don't use them, you don't need them.
+* Added dependency on `cargo-husky` for Git cleanliness.
+
+**Version 0.1.0**
+
+* Initial version.

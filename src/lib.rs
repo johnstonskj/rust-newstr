@@ -17,7 +17,8 @@ Both of these methods produce a new type, with the following:
 
 # Example
 
-The following example constructs a new string type that implements an `Identifier` value. This
+The following example constructs a new string type with the macro
+[`is_valid_newstring`](macro.is_valid_newstring.html) that implements an `Identifier` value. This
 value must be ASCII, alphanumeric, the '_' character and must not be empty.
 
 ```rust
@@ -46,6 +47,24 @@ assert_eq!(
     String::from("hello_world")
 );
 ```
+
+# Dependencies
+
+In the example above you can see the necessary use-statements for the trait implementations the
+macros generate. Unless you use `regex_is_valid` there are no crate dependencies; if you do you will
+need to add `lazy_static` and `regex` dependencies.
+
+If the macros in this crate take on addition dependencies or provide new implementations the set of
+use statements may change which will break consumer builds. To avoid this another macro,
+[`use_required`](macro.use_required.html), will add any required use statements the consumer requires.
+
+```rust
+# use newstr::{is_valid_newstring, use_required};
+use_required!();
+
+is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty());
+```
+
 */
 
 #![warn(
@@ -112,6 +131,45 @@ macro_rules! standard_impls {
 // ------------------------------------------------------------------------------------------------
 
 ///
+/// This macro expands to the set of use statements required by a consumer of either
+/// [`is_valid_newstring`](macro.is_valid_newstring.html) or
+/// [`from_str_newstring`](macro.from_str_newstring.html) macros. This can be valuable over time
+/// if the implementationof these  macros take on additional dependencies.
+///
+/// The macro takes a single, optional, parameter `regex` which will also include the necessary
+/// dependencies used by the [`regex_is_valid`](macro.regex_is_valid.html) macro.
+///
+/// # Example
+///
+/// ```rust
+/// # use newstr::{is_valid_newstring, use_required};
+/// use_required!();
+///
+/// is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty());
+/// ```
+///
+/// ```rust
+/// # use newstr::{regex_is_valid, use_required};
+/// use_required!(regex);
+///
+/// regex_is_valid!(r"[0-9]+", is_valid_integer);
+/// ```
+///
+#[macro_export]
+macro_rules! use_required {
+    () => {
+        use std::fmt::{Display, Formatter};
+        use std::ops::Deref;
+        use std::str::FromStr;
+    };
+    (regex) => {
+        use lazy_static::lazy_static;
+        use regex::Regex;
+        use_required!()
+    };
+}
+
+///
 /// This macro takes a new type identifier and a predicate function to produce a new type. The
 /// predicate is called by `T::is_valid` and is then used in the implementation of `FromStr` to
 /// determine whether to return a new instance or error.
@@ -174,10 +232,13 @@ macro_rules! is_valid_newstring {
 
 ///
 /// This macro takes a string that contains a regular expression will construct a new validity
-/// predicate that may be used by the `is_valid_newstring` macro. An optional second parameter
-/// provides a name for the new predicate function, overriding the default `is_valid`.
+/// predicate that may be used by the [`is_valid_newstring`](macro.is_valid_newstring.html) macro.
+/// An optional second parameter provides a name for the new predicate function, overriding the
+/// default `is_valid`.
 ///
-/// The generated function uses `lazy_static` to only compile the regular expression once.
+/// The generated function uses `lazy_static` to only compile the regular expression once. You
+/// will require a dependency on both the `lazy_static` and `regex` crates, as you see in the
+/// example below.
 ///
 /// # Example
 ///
@@ -190,7 +251,6 @@ macro_rules! is_valid_newstring {
 /// regex_is_valid!(r"[0-9]+", is_valid_integer);
 /// ```
 ///
-#[cfg(feature = "regex_is_valid")]
 #[macro_export]
 macro_rules! regex_is_valid {
     ($regex:expr) => {
@@ -248,10 +308,6 @@ macro_rules! regex_is_valid {
 /// assert!(OnlyUpperCase::from_str("HELLO").is_ok());
 /// assert_eq!(OnlyUpperCase::from_str("HELLO").unwrap().to_string(), String::from("HELLO"));
 /// ```
-///
-/// # Dependencies
-///
-///
 ///
 #[macro_export(local_inner_macros)]
 macro_rules! from_str_newstring {
