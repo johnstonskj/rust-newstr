@@ -4,7 +4,7 @@ implement the validity rules for the new type by either 1) providing a predicate
 the `is_valid` associated function, or 2) providing a function to parse and return a string which
 is then called by `FromStr::from_str`.
 
-Both of these methods produce a new type, with the following:
+Both of these methods produce a new struct, with the following:
 
 1. An associated predicate function `is_valid` that returns `true` if the string provided would be a
    valid value for the type.
@@ -14,6 +14,8 @@ Both of these methods produce a new type, with the following:
 1. An implementation of `From<T>` for `String`.
 1. An implementation of `Deref` for `T` with the target type `str`.
 1. An implementation of `FromStr`.
+
+Additional user-required traits can also be added to the macro to be derived by the implementation.
 
 # Example
 
@@ -94,6 +96,14 @@ is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty());
 #[doc(hidden)]
 #[macro_export]
 macro_rules! standard_struct {
+    ($new_name:ident, $( $other:ident ),*) => {
+        #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, $($other),*)]
+        pub struct $new_name(String);
+    };
+    ($new_name:ident serde) => {
+        #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Deserialize, Serialize)]
+        pub struct $new_name(String);
+    };
     ($new_name:ident) => {
         #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
         pub struct $new_name(String);
@@ -126,6 +136,54 @@ macro_rules! standard_impls {
     };
 }
 
+#[doc(hidden)]
+#[macro_export(local_inner_macros)]
+macro_rules! is_valid_inner {
+    ($new_name:ident, $closure:expr) => {
+        standard_impls! { $new_name }
+
+        impl FromStr for $new_name {
+            type Err = ();
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                if Self::is_valid(s) {
+                    Ok(Self(s.to_string()))
+                } else {
+                    Err(())
+                }
+            }
+        }
+
+        impl $new_name {
+            pub fn is_valid(s: &str) -> bool {
+                $closure(s)
+            }
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export(local_inner_macros)]
+macro_rules! from_str_inner {
+    ($new_name:ident, $closure:expr, $error:ty) => {
+        standard_impls! { $new_name }
+
+        impl FromStr for $new_name {
+            type Err = $error;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                $closure(s).map(|s| Self(s))
+            }
+        }
+
+        impl $new_name {
+            pub fn is_valid(s: &str) -> bool {
+                Self::from_str(s).is_ok()
+            }
+        }
+    };
+}
+
 // ------------------------------------------------------------------------------------------------
 // Public Macros
 // ------------------------------------------------------------------------------------------------
@@ -139,7 +197,7 @@ macro_rules! standard_impls {
 /// The macro takes a single, optional, parameter `regex` which will also include the necessary
 /// dependencies used by the [`regex_is_valid`](macro.regex_is_valid.html) macro.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```rust
 /// # use newstr::{is_valid_newstring, use_required};
@@ -172,12 +230,15 @@ macro_rules! use_required {
 ///
 /// This macro takes a new type identifier and a predicate function to produce a new type. The
 /// predicate is called by `T::is_valid` and is then used in the implementation of `FromStr` to
-/// determine whether to return a new instance or error.
+/// determine whether to return a new instance or error. As this is simply a boolean value and does
+/// not differentiate between reasons for invalidity the error type for `FromStr` is always `()`.
 ///
-/// As this is simply a boolean value and does not differentiate between reasons for invalidity
-/// the error type for `FromStr` is always `()`.
+/// An optional variadic parameter also allows other trait names to be specified which will be
+/// added to the list of traits in the `derive` attribute.
 ///
-/// # Example
+/// # Examples
+///
+/// Create a new string type with a user-defined closure.
 ///
 /// ```rust
 /// # use newstr::is_valid_newstring;
@@ -195,38 +256,37 @@ macro_rules! use_required {
 /// assert_eq!(NotEmpty::from_str("hi").unwrap().len(), 2);
 /// ```
 ///
+/// The following creates a new string type using an existing function.
+///
 /// ```rust
 /// # use newstr::is_valid_newstring;
 /// # use std::fmt::{Display, Formatter};
 /// # use std::str::FromStr;
 /// # use std::ops::Deref;
-/// is_valid_newstring!(NotEmpty, str::is_empty);
+/// is_valid_newstring!(AsciiStr, str::is_ascii);
+/// ```
+///
+/// In the following our new string type also derives serde attributes for serialization.
+///
+/// ```rust
+/// # use newstr::{is_valid_newstring, use_required};
+/// use_required!();
+/// use serde::{Deserialize, Serialize};
+///
+/// is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty(), Deserialize, Serialize);
 /// ```
 ///
 #[macro_export(local_inner_macros)]
 macro_rules! is_valid_newstring {
+    ($new_name:ident, $closure:expr, $( $other:ident ),*) => {
+        standard_struct! { $new_name, $($other),* }
+
+        is_valid_inner! { $new_name, $closure }
+    };
     ($new_name:ident, $closure:expr) => {
         standard_struct! { $new_name }
 
-        standard_impls! { $new_name }
-
-        impl FromStr for $new_name {
-            type Err = ();
-
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                if Self::is_valid(s) {
-                    Ok(Self(s.to_string()))
-                } else {
-                    Err(())
-                }
-            }
-        }
-
-        impl $new_name {
-            pub fn is_valid(s: &str) -> bool {
-                $closure(s)
-            }
-        }
+        is_valid_inner! { $new_name, $closure }
     };
 }
 
@@ -266,10 +326,6 @@ macro_rules! regex_is_valid {
     };
 }
 
-/// This macro takes a new type identifier and a predicate function to produce a new type. The
-/// predicate is called by `T::is_valid` and is then used in the implementation of `FromStr` to
-/// determine whether to return a new instance or error.
-
 ///
 /// This macro takes a new type identifier and a *parse function* to produce a new type. The parse
 /// function **must** take the form `fn(&str) -> Result<String, Err>`, this is called from within
@@ -283,7 +339,9 @@ macro_rules! regex_is_valid {
 /// type, `()`, used in the implementation of `FromStr` allowing more detail to be provided on the
 /// validation failure.
 ///
-/// # Example
+/// # Examples
+///
+/// This creates a new string type which only allows for uppercase characters.
 ///
 /// ```rust
 /// # use newstr::from_str_newstring;
@@ -309,28 +367,40 @@ macro_rules! regex_is_valid {
 /// assert_eq!(OnlyUpperCase::from_str("HELLO").unwrap().to_string(), String::from("HELLO"));
 /// ```
 ///
+/// In the following our new string type also derives serde attributes for serialization.
+///
+/// ```rust
+/// # use newstr::{from_str_newstring, use_required};
+/// use_required!();
+/// use serde::{Deserialize, Serialize};
+///
+/// fn parse_uppercase_only(s: &str) -> Result<String, ()> {
+///     if s.chars().all(|c|c.is_uppercase()) {
+///         Ok(s.to_string())
+///     } else {
+///         Err(())
+///     }
+/// }
+///
+/// from_str_newstring!(OnlyUpperCase, parse_uppercase_only, Deserialize, Serialize);
+/// ```
+///
 #[macro_export(local_inner_macros)]
 macro_rules! from_str_newstring {
     ($new_name:ident, $closure:expr) => {
         from_str_newstring! { $new_name, $closure, () }
     };
+    ($new_name:ident, $closure:expr, $( $other:ident ),*) => {
+        from_str_newstring! { $new_name, $closure, (), $($other),* }
+    };
     ($new_name:ident, $closure:expr, $error:ty) => {
         standard_struct! { $new_name }
 
-        standard_impls! { $new_name }
+        from_str_inner! { $new_name, $closure, $error }
+    };
+    ($new_name:ident, $closure:expr, $error:ty, $( $other:ident ),*) => {
+        standard_struct! { $new_name, $($other),* }
 
-        impl FromStr for $new_name {
-            type Err = $error;
-
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                $closure(s).map(|s| Self(s))
-            }
-        }
-
-        impl $new_name {
-            pub fn is_valid(s: &str) -> bool {
-                Self::from_str(s).is_ok()
-            }
-        }
+        from_str_inner! { $new_name, $closure, $error }
     };
 }

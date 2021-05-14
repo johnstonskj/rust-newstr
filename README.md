@@ -26,6 +26,8 @@ Both of these methods produce a new type, with the following:
 1. An implementation of `Deref` for `T` with the target type `str`.
 1. An implementation of `FromStr`.
 
+Additional user-required traits can also be added to the macro to be derived by the implementation.
+
 ## Example
 
 The following example constructs a new string type that implements an `Identifier` value. This
@@ -75,6 +77,13 @@ is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty());
 ```
 
 ## Changes
+
+**Version 0.1.2**
+
+* Added additional, optional, parameter to both macros that allows additional traits to be added to the `derive`
+ attribute on the generated struct.
+* Refactored the macros to reduce repetition.
+* Added some additional tests.
 
 **Version 0.1.1**
 
