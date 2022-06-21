@@ -100,10 +100,6 @@ macro_rules! standard_struct {
         #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, $($other),*)]
         pub struct $new_name(String);
     };
-    ($new_name:ident serde) => {
-        #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Deserialize, Serialize)]
-        pub struct $new_name(String);
-    };
     ($new_name:ident) => {
         #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
         pub struct $new_name(String);
