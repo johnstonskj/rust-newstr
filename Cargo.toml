@@ -1,7 +1,7 @@
 [package]
 name = "newstr"
 description = "Simple macros for declaring String-base new types."
-version = "0.1.2"
+version = "0.2.0"
 authors = ["Simon Johnston <johnstonskj@gmail.com>"]
 edition = "2018"
 documentation = "https://docs.rs/newstr/"

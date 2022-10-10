@@ -1,23 +1,26 @@
 #[macro_use]
 extern crate newstr;
 
-use_required!();
+use std::ops::Deref;
+use std::str::FromStr;
 
-#[derive(Clone, Copy)]
-struct Boo {}
-
-impl Display for Boo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Boo!")
-    }
-}
+is_valid_newstring!(AsciiStr, str::is_ascii);
+new_unchecked!(pub AsciiStr);
 
 #[test]
 fn check_for_from_str() {
-    let _: u8 = u8::from_str("16").unwrap();
+    let results = AsciiStr::from_str("hello").unwrap();
+    assert_eq!(results, AsciiStr::new_unchecked("hello"));
+}
+
+#[test]
+fn check_for_as_ref() {
+    let results = AsciiStr::from_str("hello").unwrap();
+    assert_eq!(results.as_ref(), "hello");
 }
 
 #[test]
 fn check_for_deref() {
-    let _: &str = String::from("hello").deref();
+    let results = AsciiStr::from_str("hello").unwrap();
+    assert_eq!(results.deref(), "hello");
 }

@@ -23,6 +23,7 @@ Both of these methods produce a new type, with the following:
    and `Hash`.
 1. An implementation of `Display` for `T` that simply returns the inner value.
 1. An implementation of `From<T>` for `String`.
+1. An implementation of `AsRef` for `T` with the target type `str`.
 1. An implementation of `Deref` for `T` with the target type `str`.
 1. An implementation of `FromStr`.
 
@@ -36,7 +37,6 @@ value must be ASCII, alphanumeric, the '_' character and must not be empty.
 ```rust
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use std::ops::Deref;
 
 fn is_identifier_value(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
@@ -59,24 +59,34 @@ assert_eq!(
 );
 ```
 
+The macro `new_unchecked` will add a constructor to the type that allows a
+trusted client to bypass the validity checks.
+
+``` rust
+new_unchecked!(pub(crate) Identifier);
+
+assert_eq!(
+    Identifier::from_str("hi").unwrap(),
+    Identifier::new_unchecked("hi")
+);
+```
+
 ## Dependencies
 
 In the example above you can see the necessary use-statements for the trait implementations the
 macros generate. Unless you use `regex_is_valid` there are no crate dependencies; if you do you will
 need to add `lazy_static` and `regex` dependencies.
 
-If the macros in this crate take on addition dependencies or provide new implementations the set of
-use statements may change which will break consumer builds. To avoid this another macro,
-`use_required`, will add any required use statements the consumer requires.
-
-```rust
-# use newstr::{is_valid_newstring, use_required};
-use_required!();
-
-is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty());
-```
-
 ## Changes
+
+**Version 0.2.0**
+
+* Changes to the macro API;
+  * use `;` instead of `,` to separate the additional derive macros,
+  * use full paths inside all macros, no need for the `use_required` macro any
+    more,
+  * clients will need to import any trait they then use such as `FromStr`.
+* Added `new_unchecked` macro for validity bypass.
 
 **Version 0.1.2**
 

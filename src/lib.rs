@@ -55,16 +55,6 @@ assert_eq!(
 In the example above you can see the necessary use-statements for the trait implementations the
 macros generate. Unless you use `regex_is_valid` there are no crate dependencies; if you do you will
 need to add `lazy_static` and `regex` dependencies.
-
-If the macros in this crate take on addition dependencies or provide new implementations the set of
-use statements may change which will break consumer builds. To avoid this another macro,
-[`use_required`](macro.use_required.html), will add any required use statements the consumer requires.
-
-```rust
-# use newstr::{is_valid_newstring, use_required};
-use_required!();
-
-is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty());
 ```
 
 */
@@ -96,7 +86,7 @@ is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty());
 #[doc(hidden)]
 #[macro_export]
 macro_rules! standard_struct {
-    ($new_name:ident, $( $other:ident ),*) => {
+    ($new_name:ident; $( $other:ident ),*) => {
         #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, $($other),*)]
         pub struct $new_name(String);
     };
@@ -110,8 +100,8 @@ macro_rules! standard_struct {
 #[macro_export]
 macro_rules! standard_impls {
     ($new_name:ident) => {
-        impl Display for $new_name {
-            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        impl ::std::fmt::Display for $new_name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                 write!(f, "{}", self.0)
             }
         }
@@ -122,7 +112,13 @@ macro_rules! standard_impls {
             }
         }
 
-        impl Deref for $new_name {
+        impl ::std::convert::AsRef<str> for $new_name {
+            fn as_ref(&self) -> &str {
+                &self.0
+            }
+        }
+
+        impl ::std::ops::Deref for $new_name {
             type Target = str;
 
             fn deref(&self) -> &Self::Target {
@@ -138,10 +134,10 @@ macro_rules! is_valid_inner {
     ($new_name:ident, $closure:expr) => {
         standard_impls! { $new_name }
 
-        impl FromStr for $new_name {
+        impl ::std::str::FromStr for $new_name {
             type Err = ();
 
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
+            fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
                 if Self::is_valid(s) {
                     Ok(Self(s.to_string()))
                 } else {
@@ -151,6 +147,7 @@ macro_rules! is_valid_inner {
         }
 
         impl $new_name {
+            /// Returns `true` if the value is a valid value, else `false`.
             pub fn is_valid(s: &str) -> bool {
                 $closure(s)
             }
@@ -164,16 +161,18 @@ macro_rules! from_str_inner {
     ($new_name:ident, $closure:expr, $error:ty) => {
         standard_impls! { $new_name }
 
-        impl FromStr for $new_name {
+        impl ::std::str::FromStr for $new_name {
             type Err = $error;
 
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
+            fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
                 $closure(s).map(|s| Self(s))
             }
         }
 
         impl $new_name {
+            /// Returns `true` if the value is a valid value, else `false`.
             pub fn is_valid(s: &str) -> bool {
+                use std::str::FromStr;
                 Self::from_str(s).is_ok()
             }
         }
@@ -184,42 +183,17 @@ macro_rules! from_str_inner {
 // Public Macros
 // ------------------------------------------------------------------------------------------------
 
-///
-/// This macro expands to the set of use statements required by a consumer of either
-/// [`is_valid_newstring`](macro.is_valid_newstring.html) or
-/// [`from_str_newstring`](macro.from_str_newstring.html) macros. This can be valuable over time
-/// if the implementationof these  macros take on additional dependencies.
-///
-/// The macro takes a single, optional, parameter `regex` which will also include the necessary
-/// dependencies used by the [`regex_is_valid`](macro.regex_is_valid.html) macro.
-///
-/// # Examples
-///
-/// ```rust
-/// # use newstr::{is_valid_newstring, use_required};
-/// use_required!();
-///
-/// is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty());
-/// ```
-///
-/// ```rust
-/// # use newstr::{regex_is_valid, use_required};
-/// use_required!(regex);
-///
-/// regex_is_valid!(r"[0-9]+", is_valid_integer);
-/// ```
-///
+/// This macro adds an implementation of the constructor `new_unchecked` which creates a
+/// new instance *without* any validity checking.
 #[macro_export]
-macro_rules! use_required {
-    () => {
-        use std::fmt::{Display, Formatter};
-        use std::ops::Deref;
-        use std::str::FromStr;
-    };
-    (regex) => {
-        use lazy_static::lazy_static;
-        use regex::Regex;
-        use_required!()
+macro_rules! new_unchecked {
+    ($vis:vis $new_name:ident) => {
+        impl $new_name {
+            /// Returns a new instance, without any validity checking.
+            $vis fn new_unchecked<S>(s: S) -> Self where S: AsRef<str> {
+                Self(s.as_ref().to_string())
+            }
+        }
     };
 }
 
@@ -238,10 +212,7 @@ macro_rules! use_required {
 ///
 /// ```rust
 /// # use newstr::is_valid_newstring;
-/// use std::fmt::{Display, Formatter};
-/// use std::str::FromStr;
-/// use std::ops::Deref;
-///
+/// # use std::str::FromStr;
 /// is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty());
 ///
 /// assert!(!NotEmpty::is_valid(""));
@@ -256,26 +227,22 @@ macro_rules! use_required {
 ///
 /// ```rust
 /// # use newstr::is_valid_newstring;
-/// # use std::fmt::{Display, Formatter};
-/// # use std::str::FromStr;
-/// # use std::ops::Deref;
 /// is_valid_newstring!(AsciiStr, str::is_ascii);
 /// ```
 ///
 /// In the following our new string type also derives serde attributes for serialization.
 ///
 /// ```rust
-/// # use newstr::{is_valid_newstring, use_required};
-/// use_required!();
+/// # use newstr::is_valid_newstring;
 /// use serde::{Deserialize, Serialize};
 ///
-/// is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty(), Deserialize, Serialize);
+/// is_valid_newstring!(NotEmpty, |s: &str| !s.is_empty(); Deserialize, Serialize);
 /// ```
 ///
 #[macro_export(local_inner_macros)]
 macro_rules! is_valid_newstring {
-    ($new_name:ident, $closure:expr, $( $other:ident ),*) => {
-        standard_struct! { $new_name, $($other),* }
+    ($new_name:ident, $closure:expr; $( $other:ident ),*) => {
+        standard_struct! { $new_name; $($other),* }
 
         is_valid_inner! { $new_name, $closure }
     };
@@ -300,9 +267,6 @@ macro_rules! is_valid_newstring {
 ///
 /// ```rust
 /// # use newstr::regex_is_valid;
-/// use lazy_static::lazy_static;
-/// use regex::Regex;
-/// use std::str::FromStr;
 ///
 /// regex_is_valid!(r"[0-9]+", is_valid_integer);
 /// ```
@@ -314,8 +278,9 @@ macro_rules! regex_is_valid {
     };
     ($regex:expr, $fn_name:ident) => {
         fn $fn_name(s: &str) -> bool {
-            lazy_static! {
-                static ref VALID_VALUE: Regex = Regex::from_str($regex).unwrap();
+            use std::str::FromStr;
+            ::lazy_static::lazy_static! {
+                static ref VALID_VALUE: ::regex::Regex = ::regex::Regex::from_str($regex).unwrap();
             }
             VALID_VALUE.is_match(s)
         }
@@ -341,10 +306,7 @@ macro_rules! regex_is_valid {
 ///
 /// ```rust
 /// # use newstr::from_str_newstring;
-/// use std::fmt::{Display, Formatter};
-/// use std::str::FromStr;
-/// use std::ops::Deref;
-///
+/// # use std::str::FromStr;
 /// fn parse_uppercase_only(s: &str) -> Result<String, ()> {
 ///     if s.chars().all(|c|c.is_uppercase()) {
 ///         Ok(s.to_string())
@@ -366,8 +328,7 @@ macro_rules! regex_is_valid {
 /// In the following our new string type also derives serde attributes for serialization.
 ///
 /// ```rust
-/// # use newstr::{from_str_newstring, use_required};
-/// use_required!();
+/// # use newstr::from_str_newstring;
 /// use serde::{Deserialize, Serialize};
 ///
 /// fn parse_uppercase_only(s: &str) -> Result<String, ()> {
@@ -378,7 +339,7 @@ macro_rules! regex_is_valid {
 ///     }
 /// }
 ///
-/// from_str_newstring!(OnlyUpperCase, parse_uppercase_only, Deserialize, Serialize);
+/// from_str_newstring!(OnlyUpperCase, parse_uppercase_only; Deserialize, Serialize);
 /// ```
 ///
 #[macro_export(local_inner_macros)]
@@ -386,16 +347,16 @@ macro_rules! from_str_newstring {
     ($new_name:ident, $closure:expr) => {
         from_str_newstring! { $new_name, $closure, () }
     };
-    ($new_name:ident, $closure:expr, $( $other:ident ),*) => {
-        from_str_newstring! { $new_name, $closure, (), $($other),* }
+    ($new_name:ident, $closure:expr; $( $other:ident ),*) => {
+        from_str_newstring! { $new_name, $closure, (); $($other),* }
     };
     ($new_name:ident, $closure:expr, $error:ty) => {
         standard_struct! { $new_name }
 
         from_str_inner! { $new_name, $closure, $error }
     };
-    ($new_name:ident, $closure:expr, $error:ty, $( $other:ident ),*) => {
-        standard_struct! { $new_name, $($other),* }
+    ($new_name:ident, $closure:expr, $error:ty; $( $other:ident ),*) => {
+        standard_struct! { $new_name; $($other),* }
 
         from_str_inner! { $new_name, $closure, $error }
     };
